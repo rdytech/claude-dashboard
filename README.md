@@ -30,8 +30,8 @@ This launches an interactive TUI that displays:
 | Key | Action |
 |-----|--------|
 | `j` / `k` or `↑` / `↓` | Navigate list |
-| `Enter` / `Space` | Toggle preview pane (shows last ~5 message exchanges) |
-| `o` | Open session in Claude Code |
+| `Space` | Toggle preview pane (shows last ~5 message exchanges) |
+| `o` / `Enter` | Open session in Claude Code |
 | `d` | Dismiss session (hide from list) |
 | `r` | Refresh / re-scan conversation files |
 | `q` / `Ctrl+C` | Quit |
@@ -45,7 +45,7 @@ This launches an interactive TUI that displays:
 
 ### Dismissal
 - Sessions can be marked as dismissed by pressing `d`
-- Dismissed session IDs are stored in `~/.claude/sessions.log`
+- Dismissed session IDs are stored in `~/.claude/session.log`
 - Dismissed sessions are hidden from the TUI
 - Can also be dismissed from within Claude Code via `/clear` command with proper hook setup
 
@@ -59,30 +59,29 @@ This launches an interactive TUI that displays:
 └── (etc.)
 ```
 
-## Hook Configuration (Optional)
+## Hook Configuration
 
-To automatically dismiss sessions when using `/clear` in Claude Code, configure the `endSession` hook in `~/.claude/settings.json`:
+To automatically dismiss sessions when using `/clear` in Claude Code, add a `SessionEnd` hook to `~/.claude/settings.json`:
 
 ```json
 {
   "hooks": {
-    "endSession": "bash ~/.claude/hooks/dismiss-session.sh"
+    "SessionEnd": [
+      {
+        "matcher": "clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json; print(json.load(sys.stdin)['session_id'])\" >> ~/.claude/session.log"
+          }
+        ]
+      }
+    ]
   }
 }
 ```
 
-And create `~/.claude/hooks/dismiss-session.sh`:
-
-```bash
-#!/bin/bash
-if [ -n "$CLAUDE_SESSION_ID" ]; then
-  echo "$CLAUDE_SESSION_ID" >> ~/.claude/sessions.log
-  echo "Session $CLAUDE_SESSION_ID dismissed"
-else
-  echo "Error: CLAUDE_SESSION_ID not set" >&2
-  exit 1
-fi
-```
+The hook fires on `/clear`, reads the session ID from stdin (passed by Claude Code as JSON), and appends it to `~/.claude/session.log`. The TUI reads that file on startup and on refresh to exclude dismissed sessions.
 
 ## Project Structure
 
