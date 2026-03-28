@@ -54,17 +54,3 @@ def dismiss_session(session_id: str) -> None:
             f.write(f"{session_id}\n")
     except Exception as e:
         print(f"Error: Failed to dismiss session: {e}")
-
-
-def is_dismissed(session_id: str) -> bool:
-    """
-    Check if a session is dismissed.
-
-    Args:
-        session_id: The session ID to check
-
-    Returns:
-        True if the session is dismissed, False otherwise
-    """
-    dismissed = read_dismissed_ids()
-    return session_id in dismissed
