@@ -25,6 +25,9 @@ This launches an interactive TUI that displays:
 - Project name, session title, time elapsed, and last message preview
 - A scrollable list with keyboard navigation
 
+<img width="1236" height="514" alt="image" src="https://github.com/user-attachments/assets/ab57d567-4f8f-4f09-afd0-0210d58f6a03" />
+
+
 ## Key Bindings
 
 | Key | Action |
