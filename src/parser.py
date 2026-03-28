@@ -102,7 +102,11 @@ def parse_jsonl(filepath: Path) -> Optional[Session]:
     # or: ~/.claude/projects/-/{sessionId}.jsonl
     relative_parts = filepath.relative_to(Path.home() / ".claude" / "projects").parts
     if len(relative_parts) >= 2:
-        project_name = relative_parts[0]
+        # The directory name is a slug like "c--tools-agent-dashboard"
+        # where "--" encodes path separators. Use the last segment for a
+        # cleaner display name (e.g. "agent-dashboard").
+        slug = relative_parts[0]
+        project_name = slug.rsplit("--", 1)[-1] if "--" in slug else slug
     else:
         project_name = "-"
 
