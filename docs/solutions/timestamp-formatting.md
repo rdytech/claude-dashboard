@@ -1,4 +1,9 @@
-# Elapsed Time Formatting
+> **Superseded by [`timestamp-z-suffix-parsing.md`](./timestamp-z-suffix-parsing.md)**
+> This document records the initial investigation. The root cause (timestamp extraction falling back to `datetime.now()`) was identified here, but the precise cause — Python 3.10's `fromisoformat()` rejecting the `Z` UTC suffix — and its fix are in the superseding document. The code shown in "Implementation Details" below does **not** include the fix.
+
+---
+
+# Elapsed Time Formatting (Investigation — Superseded)
 
 ## Problem
 Users reported that session times always showed "just now" regardless of actual elapsed time. Expected to see relative times like "2h ago", "1d ago", etc.

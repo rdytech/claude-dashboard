@@ -130,7 +130,7 @@ Use this checklist when building similar applications that integrate with Claude
 |------|-------|
 | Claude Code sessions | `~/.claude/projects/{project}/{sessionId}.jsonl` |
 | Default context | `~/.claude/projects/-/{sessionId}.jsonl` |
-| Dismissal log | `~/.claude/sessions.log` |
+| Dismissal log | `~/.claude/session.log` |
 | Settings | `~/.claude/settings.json` |
 
 ## Textual Best Practices
