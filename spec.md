@@ -36,13 +36,13 @@ Since Claude always responds, **all active sessions are considered "pending"** b
 
 ### Dismissal Log
 
-**Location:** `~/.claude/sessions.log`
+**Location:** `~/.claude/session.log`
 
 Simple text file, one `sessionId` per line. Sessions whose IDs appear here are hidden from the TUI.
 
 ### How Sessions Get Dismissed
 
-1. **From within a Claude Code session:** User types `/clear` → `endSession` hook fires → logs the `sessionId` + "cheerio" marker to `~/.claude/sessions.log`
+1. **From within a Claude Code session:** User types `/clear` → `endSession` hook fires → logs the `sessionId` + "cheerio" marker to `~/.claude/session.log`
    - Hook configuration (in `.claude/settings.json`):
      ```json
      {
@@ -51,9 +51,9 @@ Simple text file, one `sessionId` per line. Sessions whose IDs appear here are h
        }
      }
      ```
-   - Hook script appends: `{sessionId}` (one per line) to `~/.claude/sessions.log`
+   - Hook script appends: `{sessionId}` (one per line) to `~/.claude/session.log`
 
-2. **From the TUI:** User presses `d` on a session → TUI appends `sessionId` to `~/.claude/sessions.log`
+2. **From the TUI:** User presses `d` on a session → TUI appends `sessionId` to `~/.claude/session.log`
 
 ---
 
@@ -96,7 +96,7 @@ If no sessions are pending: `All caught up.`
 | `j` / `k` or `↑` / `↓` | Navigate list |
 | `Enter` / `Space` | Toggle inline preview pane |
 | `o` | Open session in Claude Code (`claude --resume {sessionId}`) |
-| `d` | Dismiss session (append to `~/.claude/sessions.log`) |
+| `d` | Dismiss session (append to `~/.claude/session.log`) |
 | `r` | Refresh / re-scan conversation files |
 | `q` / `Ctrl+C` | Quit |
 
@@ -174,7 +174,7 @@ agent-dashboard/
 - Compute elapsed time from the last message's `timestamp`
 
 **Dismissal Logic:**
-- Read `~/.claude/sessions.log` on startup and after each dismiss
+- Read `~/.claude/session.log` on startup and after each dismiss
 - Filter out any session whose `sessionId` appears in the log
 - When user presses `d`, append `sessionId\n` to the file
 
@@ -199,7 +199,7 @@ And create `~/.claude/hooks/dismiss-session.sh`:
 # Appends the current session ID to the dismissal log
 # Claude Code passes sessionId via $CLAUDE_SESSION_ID environment variable
 if [ -n "$CLAUDE_SESSION_ID" ]; then
-  echo "$CLAUDE_SESSION_ID" >> ~/.claude/sessions.log
+  echo "$CLAUDE_SESSION_ID" >> ~/.claude/session.log
   echo "Session $CLAUDE_SESSION_ID dismissed (cheerio)"
 else
   echo "Error: CLAUDE_SESSION_ID not set" >&2
@@ -243,12 +243,12 @@ Confirmed. This opens the session in Claude Code with full context restored.
 
 | Option | Approach | Pros | Cons |
 |--------|----------|------|------|
-| **A** (Recommended) | Single text file: `~/.claude/sessions.log` | Simple, transparent, auditable, human-readable | Append-only (grows over time, needs occasional cleanup) |
+| **A** (Recommended) | Single text file: `~/.claude/session.log` | Simple, transparent, auditable, human-readable | Append-only (grows over time, needs occasional cleanup) |
 | **B** | Per-session marker: `.dismissed` file in each session dir | Atomic, easy to undo (delete marker), scattered state | Harder to audit globally, file system sprawl |
 | **C** | Structured JSON: `~/.claude/dismissed-sessions.json` | Can include metadata (time, reason), structured | JSON parsing overhead, more complex |
 | **D** | Organized text: `~/.claude/state/dismissed.txt` | Same as A but organized | Just organizational (functionally identical to A) |
 
-**Recommendation:** **Option A** (`~/.claude/sessions.log`)
+**Recommendation:** **Option A** (`~/.claude/session.log`)
 
 **Why:**
 - Simplicity: one plain text file, one session ID per line

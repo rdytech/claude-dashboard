@@ -85,15 +85,39 @@ not affected.
 
 ---
 
-## Out of scope: original session stays after /clear
+## Two-layer defense: how the filters relate
 
-The `endSession` hook (`~/.claude/hooks/dismiss-session.sh`) is intended to run when
-`/clear` fires, logging the old session ID to `sessions.log`.  In practice it does not
-fire on `/clear` — only on full session termination.  The original session therefore
-remains visible until the user manually presses `d` in the TUI.
+There are two independent mechanisms that together keep `/clear` sessions off the list:
 
-This is a hook-configuration limitation, not a parser bug.  No `sessions.log` file
-existed on disk during investigation, confirming the hook was never triggered.
+| Layer | Where | Mechanism | When it applies |
+|-------|-------|-----------|-----------------|
+| 1 — Content check | `parse_jsonl()` line 87 | `_is_clear_session()` returns `None` before ID is even extracted | Always; fires during file parsing |
+| 2 — ID dismissal | `refresh_sessions()` | Session ID in `sessions.log` excluded from `active_sessions` | Only when the hook fires |
+
+**If the hook fires cleanly**, layer 2 would catch the session — but layer 1 still runs
+first and bails out earlier (before ID extraction), so the session never enters the
+dismissed-ID lookup at all.
+
+**If the hook never fires** (first install, misconfiguration), layer 1 is the only
+defense for the clear-spawned artifact.  The *original* session that was cleared has no
+`<command-name>/clear</command-name>` tag and will still be visible until the user
+presses `d` manually.
+
+**Key implication:** `_is_clear_session()` is redundant when the hook is reliable, but
+harmless and cheap (no ID extraction cost).  Do not remove it — it is the safety net for
+unhoooked installs.
+
+---
+
+## Dismissal hook and the original session
+
+When the hook fires on `/clear`, it writes the **original** (pre-clear) session ID to
+`~/.claude/sessions.log`.  `read_dismissed_ids()` reads that file and `refresh_sessions()`
+excludes any session whose ID appears in it.
+
+The clear-spawned artifact (the new UUID file) is handled independently by
+`_is_clear_session()` — the hook never writes that new UUID, because Claude Code fires the
+hook with the *old* session context.
 
 ---
 
@@ -105,3 +129,5 @@ existed on disk during investigation, confirming the hook was never triggered.
 - The `/clear` detection relies on the literal string `<command-name>/clear</command-name>`
   appearing in message content.  If Claude Code changes how it logs slash commands, the
   detection would need to be updated.
+- `_is_clear_session()` runs before session ID extraction (line 87 vs line 91).  If you
+  ever refactor parse order, ensure the content check still runs before the ID is needed.

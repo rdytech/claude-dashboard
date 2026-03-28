@@ -9,7 +9,7 @@ from pathlib import Path
 
 def _get_dismissal_log_path() -> Path:
     """Get the path to the dismissal log."""
-    return Path.home() / ".claude" / "sessions.log"
+    return Path.home() / ".claude" / "session.log"
 
 
 def read_dismissed_ids() -> set[str]:
