@@ -21,15 +21,18 @@ class SessionListItem(ListItem):
     def __init__(self, session: Session):
         super().__init__()
         self.session = session
+        if session.status == "ready":
+            self.add_class("status-ready")
 
     def render(self) -> str:
         """Render the list item."""
-        # Format: "project [title] time"
+        # Format: "project [title] status time"
         # Preview on next line
         elapsed = format_elapsed_time(self.session.last_message_timestamp)
+        status = self.session.status
 
         # Build the main line
-        main_line = f"  {self.session.project_name:15} [{self.session.title:40}] {elapsed:>10}"
+        main_line = f"  {self.session.project_name:15} [{self.session.title:40}] {status:>11} {elapsed:>10}"
 
         # Build the preview line
         preview = self.session.last_assistant_message
@@ -144,6 +147,10 @@ class PendingSessionsApp(App):
     #session-list {
         height: 1fr;
         border: solid $primary;
+    }
+
+    SessionListItem.status-ready {
+        color: $success;
     }
 
     #preview-pane {

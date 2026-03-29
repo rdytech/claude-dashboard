@@ -21,6 +21,7 @@ class Session:
     last_message_timestamp: datetime
     last_assistant_message: str
     full_message_history: list[dict]
+    status: str = "ready"  # "in progress" or "ready"
 
 
 def discover_sessions() -> list[Session]:
@@ -134,6 +135,11 @@ def parse_jsonl(filepath: Path) -> Optional[Session]:
     # Extract last assistant message for preview
     last_assistant_msg = _extract_last_assistant_message(lines)
 
+    # Determine session status based on the last conversational message role.
+    # If the last role is "user", the agent is still formulating its response.
+    # If the last role is "assistant", the agent has finished and is waiting.
+    status = _determine_status(lines)
+
     return Session(
         session_id=session_id,
         project_name=project_name,
@@ -141,6 +147,7 @@ def parse_jsonl(filepath: Path) -> Optional[Session]:
         last_message_timestamp=last_timestamp,
         last_assistant_message=last_assistant_msg,
         full_message_history=lines,
+        status=status,
     )
 
 
@@ -164,6 +171,21 @@ def _is_clear_session(lines: list[dict]) -> bool:
         if msg.get("message", {}).get("role") == "assistant":
             has_assistant = True
     return has_clear_command and not has_assistant
+
+
+def _determine_status(lines: list[dict]) -> str:
+    """Determine whether the agent is still formulating or has finished.
+
+    Walks backwards through the message history to find the last message
+    with a conversational role (user or assistant).  If the last such role
+    is "user", the agent hasn't replied yet → "in progress".  Otherwise
+    → "ready".
+    """
+    for msg in reversed(lines):
+        role = msg.get("message", {}).get("role")
+        if role in ("user", "assistant"):
+            return "in progress" if role == "user" else "ready"
+    return "ready"
 
 
 def _extract_title(lines: list[dict]) -> str:
