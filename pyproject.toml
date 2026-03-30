@@ -23,4 +23,4 @@ agent-dashboard = "main:main"
 packages = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = ["."]  # fallback if not installed editable
