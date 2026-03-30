@@ -251,7 +251,7 @@ class PendingSessionsApp(App):
             if session:
                 # Exit with the session ID, main.py will handle launching Claude Code
                 # after the app has fully exited and restored the terminal
-                self.exit(result=session.session_id)
+                self.exit(result=session)
         except Exception as e:
             print("Error opening session: {}".format(e))
 

@@ -22,6 +22,40 @@ class Session:
     last_assistant_message: str
     full_message_history: list[dict]
     status: str = "ready"  # "in progress" or "ready"
+    project_dir: Optional[str] = None  # original cwd for --resume
+
+
+def _build_session_cwd_map() -> dict[str, str]:
+    """Scan ~/.claude/sessions/*.json and return {session_id: cwd}.
+
+    These files contain concatenated JSON objects (not valid JSON, not JSONL).
+    We use raw_decode() to parse multiple objects from each file.
+    """
+    sessions_dir = Path.home() / ".claude" / "sessions"
+    if not sessions_dir.exists():
+        return {}
+
+    cwd_map: dict[str, str] = {}
+    decoder = json.JSONDecoder()
+
+    for json_file in sessions_dir.glob("*.json"):
+        try:
+            raw = json_file.read_text(encoding="utf-8")
+            idx = 0
+            while idx < len(raw):
+                remaining = raw[idx:].lstrip()
+                if not remaining:
+                    break
+                obj, end = decoder.raw_decode(remaining)
+                idx += (len(raw) - idx) - len(remaining) + end
+                sid = obj.get("sessionId")
+                cwd = obj.get("cwd")
+                if sid and cwd:
+                    cwd_map[sid] = cwd
+        except Exception:
+            continue
+
+    return cwd_map
 
 
 def discover_sessions() -> list[Session]:
@@ -36,6 +70,7 @@ def discover_sessions() -> list[Session]:
     if not projects_dir.exists():
         return []
 
+    cwd_map = _build_session_cwd_map()
     sessions = []
 
     # Find all .jsonl files, but only at the top level of each project directory.
@@ -48,6 +83,7 @@ def discover_sessions() -> list[Session]:
         try:
             session = parse_jsonl(jsonl_file)
             if session:
+                session.project_dir = cwd_map.get(session.session_id)
                 sessions.append(session)
         except Exception as e:
             # Log but continue on parse errors
