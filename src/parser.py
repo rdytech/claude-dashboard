@@ -70,7 +70,6 @@ def discover_sessions() -> list[Session]:
     if not projects_dir.exists():
         return []
 
-    cwd_map = _build_session_cwd_map()
     sessions = []
 
     # Find all .jsonl files, but only at the top level of each project directory.
@@ -83,7 +82,6 @@ def discover_sessions() -> list[Session]:
         try:
             session = parse_jsonl(jsonl_file)
             if session:
-                session.project_dir = cwd_map.get(session.session_id)
                 sessions.append(session)
         except Exception as e:
             # Log but continue on parse errors
@@ -124,11 +122,15 @@ def parse_jsonl(filepath: Path) -> Optional[Session]:
     if _is_clear_session(lines):
         return None
 
-    # Extract session ID (from any message, they all have the same session_id)
+    # Extract session ID and cwd from the first message that has them
     session_id = None
+    project_dir = None
     for msg in lines:
-        if "sessionId" in msg:
+        if not session_id and "sessionId" in msg:
             session_id = msg["sessionId"]
+        if not project_dir and "cwd" in msg:
+            project_dir = msg["cwd"]
+        if session_id and project_dir:
             break
 
     if not session_id:
@@ -184,6 +186,7 @@ def parse_jsonl(filepath: Path) -> Optional[Session]:
         last_assistant_message=last_assistant_msg,
         full_message_history=lines,
         status=status,
+        project_dir=project_dir,
     )
 
 

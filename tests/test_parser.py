@@ -130,12 +130,15 @@ _CLEAR_CONTENT = (
 )
 
 
-def _write_real_session(session_id: str, project_dir: Path) -> Path:
+def _write_real_session(session_id: str, project_dir: Path, cwd: str = None) -> Path:
     """Create a normal JSONL session file with at least one assistant message."""
     jsonl_file = project_dir / f"{session_id}.jsonl"
+    user_msg = {"sessionId": session_id, "timestamp": _TS,
+                "message": {"role": "user", "content": "help me refactor"}}
+    if cwd:
+        user_msg["cwd"] = cwd
     with open(jsonl_file, "w") as f:
-        f.write(json.dumps({"sessionId": session_id, "timestamp": _TS,
-                            "message": {"role": "user", "content": "help me refactor"}}) + "\n")
+        f.write(json.dumps(user_msg) + "\n")
         f.write(json.dumps({"sessionId": session_id, "timestamp": _TS,
                             "message": {"role": "assistant", "content": "Sure, here is how."}}) + "\n")
     return jsonl_file
@@ -488,37 +491,28 @@ class TestSevenDayFilter:
 
 
 class TestDiscoverSessionsProjectDir:
-    """discover_sessions() should populate project_dir from ~/.claude/sessions/*.json."""
+    """discover_sessions() should populate project_dir from the cwd field in JSONL messages."""
 
-    def test_project_dir_populated_from_session_json(self, tmp_path, monkeypatch):
-        """Sessions get project_dir set when a matching sessions/*.json entry exists."""
+    def test_project_dir_populated_from_jsonl_cwd(self, tmp_path, monkeypatch):
+        """Sessions get project_dir from the cwd field in their JSONL messages."""
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
-        # Create a session JSONL file
         proj_dir = tmp_path / ".claude" / "projects" / "my-project"
         proj_dir.mkdir(parents=True)
-        _write_real_session("sess-001", proj_dir)
-
-        # Create the sessions/*.json mapping
-        sessions_dir = tmp_path / ".claude" / "sessions"
-        sessions_dir.mkdir(parents=True)
-        _write_session_json(sessions_dir, 42, [
-            {"sessionId": "sess-001", "cwd": "/home/user/my-project", "pid": 42},
-        ])
+        _write_real_session("sess-001", proj_dir, cwd="/home/user/my-project")
 
         sessions = discover_sessions()
         assert len(sessions) == 1
         assert sessions[0].project_dir == "/home/user/my-project"
 
-    def test_project_dir_none_when_no_session_json(self, tmp_path, monkeypatch):
-        """Sessions without a matching sessions/*.json entry get project_dir=None."""
+    def test_project_dir_none_when_no_cwd_in_jsonl(self, tmp_path, monkeypatch):
+        """Sessions without a cwd field in JSONL get project_dir=None."""
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
 
         proj_dir = tmp_path / ".claude" / "projects" / "my-project"
         proj_dir.mkdir(parents=True)
-        _write_real_session("orphan-001", proj_dir)
+        _write_real_session("orphan-001", proj_dir)  # no cwd param
 
-        # No sessions/*.json files at all
         sessions = discover_sessions()
         assert len(sessions) == 1
         assert sessions[0].project_dir is None
