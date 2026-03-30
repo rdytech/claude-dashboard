@@ -306,9 +306,13 @@ class PendingSessionsApp(App):
 
         yield Footer()
 
+    def __init__(self, default_days: int | None = None):
+        super().__init__()
+        self._initial_days = default_days if default_days is not None else DEFAULT_DAYS_FILTER
+
     def on_mount(self):
         """Initialize the app on mount."""
-        self._days_filter = DEFAULT_DAYS_FILTER
+        self._days_filter = self._initial_days
         self._grouped = True
         self.title = "Claude Code Pending Sessions"
         self.sub_title = filter_subtitle(self._days_filter)
