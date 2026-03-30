@@ -317,6 +317,7 @@ class PendingSessionsApp(App):
         self.title = "Claude Code Pending Sessions"
         self.sub_title = filter_subtitle(self._days_filter)
         self.refresh_sessions()
+        self.query_one("#session-list", SessionListView).focus()
 
     def refresh_sessions(self):
         """Refresh the session list from disk."""
