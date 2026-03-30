@@ -324,9 +324,16 @@ class PendingSessionsApp(App):
     @work(thread=True)
     def _load_sessions(self):
         """Load sessions in a background thread for non-blocking startup."""
+        self.call_from_thread(self._show_loading)
         all_sessions = discover_sessions()
         active_sessions = filter_sessions(all_sessions, self._days_filter)
         self.call_from_thread(self._update_session_list, active_sessions)
+
+    def _show_loading(self):
+        """Show a loading indicator in the session list."""
+        list_view = self.query_one("#session-list", SessionListView)
+        list_view.clear()
+        list_view.append(ListItem(Static("  Loading sessions...")))
 
     def _update_session_list(self, sessions: list[Session]):
         """Update the UI with loaded sessions (called on the main thread)."""
