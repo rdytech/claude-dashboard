@@ -99,21 +99,25 @@ def is_within_cutoff(session: Session, cutoff: datetime) -> bool:
 class SessionListItem(ListItem):
     """A single session item in the list."""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: Session, grouped: bool = False):
         super().__init__()
         self.session = session
+        self.grouped = grouped
         if session.status == "ready":
             self.add_class("status-ready")
 
     def render(self) -> str:
         """Render the list item."""
-        # Format: "project [title] status time"
+        # Format: "project [title] status time" (flat) or "[title] status time" (grouped)
         # Preview on next line
         elapsed = format_elapsed_time(self.session.last_message_timestamp)
         status = self.session.status
 
-        # Build the main line
-        main_line = f"  {self.session.project_name:15} [{self.session.title:40}] {status:>11} {elapsed:>10}"
+        # Build the main line — omit project name when grouped (header already shows it)
+        if self.grouped:
+            main_line = f"  [{self.session.title:40}] {status:>11} {elapsed:>10}"
+        else:
+            main_line = f"  {self.session.project_name:15} [{self.session.title:40}] {status:>11} {elapsed:>10}"
 
         # Build the preview line
         preview = self.session.last_assistant_message
@@ -154,7 +158,7 @@ class SessionListView(ListView):
                 header.add_class("group-header")
                 self.append(header)
             else:
-                self.append(SessionListItem(value))
+                self.append(SessionListItem(value, grouped=True))
 
     def get_selected_session(self) -> Session | None:
         """Get the currently selected session.

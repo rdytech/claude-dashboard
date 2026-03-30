@@ -263,3 +263,27 @@ class TestGroupSessions:
             f"Alpha group should contain a1, a2 in order, got {alpha_sessions}"
         )
 
+
+class TestSessionListItemGroupedRendering:
+    """SessionListItem should omit the project name when rendered in grouped mode."""
+
+    def test_render_flat_includes_project_name(self):
+        """In flat mode (grouped=False), the project name column is present."""
+        from src.ui import SessionListItem
+        session = _make_session("s1", "my-project")
+        item = SessionListItem(session, grouped=False)
+        rendered = item.render()
+        assert "my-project" in rendered, (
+            f"Flat mode should include project name. Got: {rendered}"
+        )
+
+    def test_render_grouped_omits_project_name(self):
+        """In grouped mode (grouped=True), the project name column is omitted."""
+        from src.ui import SessionListItem
+        session = _make_session("s1", "my-project")
+        item = SessionListItem(session, grouped=True)
+        rendered = item.render()
+        assert "my-project" not in rendered, (
+            f"Grouped mode should omit project name. Got: {rendered}"
+        )
+
