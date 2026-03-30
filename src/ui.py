@@ -6,15 +6,49 @@ Main UI components and key binding handlers.
 
 from datetime import datetime, timedelta, timezone
 
+from typing import Optional
+
 from textual.app import ComposeResult, App
 from textual.containers import Vertical
-from textual.widgets import Footer, Header, ListItem, ListView, Static
+from textual.widgets import Footer, Header, Input, ListItem, ListView, Static
 from textual.binding import Binding
 
 from src.parser import Session, discover_sessions, format_elapsed_time, _extract_text_from_content
 from src.dismiss import read_dismissed_ids, dismiss_session
 
 DEFAULT_DAYS_FILTER = 7
+
+
+def parse_filter_input(value: str) -> Optional[int]:
+    """Parse user input for the days filter.
+
+    Returns a non-negative integer, or None if input is invalid.
+    """
+    try:
+        days = int(value)
+        return days if days >= 0 else None
+    except (ValueError, TypeError):
+        return None
+
+
+def filter_subtitle(days_filter: int) -> str:
+    """Return the subtitle text for the current filter setting."""
+    return f"Last {days_filter}d" if days_filter > 0 else "All sessions"
+
+
+def filter_sessions(sessions: list[Session], days_filter: int = DEFAULT_DAYS_FILTER) -> list[Session]:
+    """Apply dismissal and optional date filtering to a session list.
+
+    When days_filter is 0, no date filtering is applied (show all sessions).
+    """
+    dismissed_ids = read_dismissed_ids()
+    result = [s for s in sessions if s.session_id not in dismissed_ids]
+
+    if days_filter > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_filter)
+        result = [s for s in result if is_within_cutoff(s, cutoff)]
+
+    return result
 
 
 def is_within_cutoff(session: Session, cutoff: datetime) -> bool:
@@ -150,6 +184,7 @@ class PendingSessionsApp(App):
         Binding("space", "toggle_preview", "Preview", show=True),
         Binding("o", "open_session", "Open", show=True),
         Binding("d", "dismiss_current", "Dismiss", show=True),
+        Binding("f", "open_filter", "Filter", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("q", "quit", "Quit", show=True),
     ]
@@ -157,6 +192,17 @@ class PendingSessionsApp(App):
     CSS = """
     Screen {
         layout: vertical;
+    }
+
+    #filter-input {
+        dock: top;
+        display: none;
+        height: 3;
+        border: solid $accent;
+    }
+
+    #filter-input.visible {
+        display: block;
     }
 
     #session-list {
@@ -192,6 +238,7 @@ class PendingSessionsApp(App):
         yield Header()
 
         with Vertical(id="main-container"):
+            yield Input(placeholder="Days to filter (0 = all):", id="filter-input")
             yield SessionListView(id="session-list")
             yield PreviewPane(id="preview-pane")
 
@@ -199,29 +246,37 @@ class PendingSessionsApp(App):
 
     def on_mount(self):
         """Initialize the app on mount."""
+        self._days_filter = DEFAULT_DAYS_FILTER
         self.title = "Claude Code Pending Sessions"
+        self.sub_title = filter_subtitle(self._days_filter)
         self.refresh_sessions()
 
     def refresh_sessions(self):
         """Refresh the session list from disk."""
-        # Discover all sessions
         all_sessions = discover_sessions()
+        active_sessions = filter_sessions(all_sessions, self._days_filter)
 
-        # Layer 2: Filter out dismissed sessions
-        dismissed_ids = read_dismissed_ids()
-        active_sessions = [
-            s for s in all_sessions if s.session_id not in dismissed_ids
-        ]
-
-        # Layer 3: Filter by date cutoff (default: last 7 days)
-        cutoff = datetime.now(timezone.utc) - timedelta(days=DEFAULT_DAYS_FILTER)
-        active_sessions = [
-            s for s in active_sessions if is_within_cutoff(s, cutoff)
-        ]
-
-        # Get the list view and update it
         list_view = self.query_one("#session-list", SessionListView)
         list_view.update_sessions(active_sessions)
+
+    def action_open_filter(self):
+        """Show the filter input widget."""
+        filter_input = self.query_one("#filter-input", Input)
+        filter_input.add_class("visible")
+        filter_input.value = str(self._days_filter)
+        filter_input.focus()
+
+    def on_input_submitted(self, event: Input.Submitted):
+        """Handle filter input submission."""
+        if event.input.id == "filter-input":
+            days = parse_filter_input(event.value)
+            if days is not None:
+                self._days_filter = days
+            event.input.remove_class("visible")
+            event.input.value = ""
+            self.query_one("#session-list", SessionListView).focus()
+            self.sub_title = filter_subtitle(self._days_filter)
+            self.refresh_sessions()
 
     def action_move_up(self):
         """Move up in the list."""
