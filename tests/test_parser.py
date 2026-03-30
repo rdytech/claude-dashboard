@@ -5,7 +5,7 @@ import pytest
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from src.parser import format_elapsed_time, parse_jsonl, discover_sessions, _build_session_cwd_map
+from src.parser import format_elapsed_time, parse_jsonl, discover_sessions
 
 
 class TestElapsedTimeFormatting:
@@ -271,95 +271,6 @@ class TestSubagentFileFiltering:
             f"{[s.session_id for s in sessions]}"
         )
         assert sessions[0].session_id == "the-session"
-
-
-# ---------------------------------------------------------------------------
-# Session CWD resolution (fix: resume uses wrong working directory)
-# ---------------------------------------------------------------------------
-
-def _write_session_json(sessions_dir: Path, pid: int, entries: list[dict]) -> Path:
-    """Write a sessions/*.json file with concatenated JSON objects (not JSONL)."""
-    json_file = sessions_dir / f"{pid}.json"
-    # Claude Code writes concatenated JSON objects with no separator
-    raw = "".join(json.dumps(e) for e in entries)
-    json_file.write_text(raw, encoding="utf-8")
-    return json_file
-
-
-class TestBuildSessionCwdMap:
-    """_build_session_cwd_map() reads ~/.claude/sessions/*.json to map session IDs to CWDs."""
-
-    def test_single_entry(self, tmp_path, monkeypatch):
-        """A single session entry maps sessionId to cwd."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        sessions_dir = tmp_path / ".claude" / "sessions"
-        sessions_dir.mkdir(parents=True)
-        _write_session_json(sessions_dir, 1234, [
-            {"sessionId": "aaa-111", "cwd": "/home/user/project-a", "pid": 1234},
-        ])
-
-        result = _build_session_cwd_map()
-        assert result["aaa-111"] == "/home/user/project-a"
-
-    def test_multiple_entries_concatenated(self, tmp_path, monkeypatch):
-        """Multiple JSON objects concatenated in one file are all parsed."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        sessions_dir = tmp_path / ".claude" / "sessions"
-        sessions_dir.mkdir(parents=True)
-        _write_session_json(sessions_dir, 5678, [
-            {"sessionId": "aaa-111", "cwd": "/path/a", "pid": 5678},
-            {"sessionId": "bbb-222", "cwd": "/path/b", "pid": 5678},
-        ])
-
-        result = _build_session_cwd_map()
-        assert result["aaa-111"] == "/path/a"
-        assert result["bbb-222"] == "/path/b"
-
-    def test_duplicate_session_id_last_wins(self, tmp_path, monkeypatch):
-        """When a session ID appears in multiple files, the last-written entry wins."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        sessions_dir = tmp_path / ".claude" / "sessions"
-        sessions_dir.mkdir(parents=True)
-        _write_session_json(sessions_dir, 100, [
-            {"sessionId": "aaa-111", "cwd": "/old/path", "pid": 100},
-        ])
-        _write_session_json(sessions_dir, 200, [
-            {"sessionId": "aaa-111", "cwd": "/new/path", "pid": 200},
-        ])
-
-        result = _build_session_cwd_map()
-        # We accept either path — the key point is it doesn't crash
-        assert "aaa-111" in result
-
-    def test_missing_sessions_dir_returns_empty(self, tmp_path, monkeypatch):
-        """If ~/.claude/sessions/ doesn't exist, return an empty dict."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        result = _build_session_cwd_map()
-        assert result == {}
-
-    def test_malformed_json_file_skipped(self, tmp_path, monkeypatch):
-        """A sessions/*.json file with invalid JSON is skipped without crashing."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        sessions_dir = tmp_path / ".claude" / "sessions"
-        sessions_dir.mkdir(parents=True)
-        bad_file = sessions_dir / "9999.json"
-        bad_file.write_text("not valid json{{{", encoding="utf-8")
-
-        # Should not raise
-        result = _build_session_cwd_map()
-        assert result == {}
-
-    def test_entry_missing_cwd_field_skipped(self, tmp_path, monkeypatch):
-        """Entries without a cwd field are ignored."""
-        monkeypatch.setattr(Path, "home", lambda: tmp_path)
-        sessions_dir = tmp_path / ".claude" / "sessions"
-        sessions_dir.mkdir(parents=True)
-        _write_session_json(sessions_dir, 111, [
-            {"sessionId": "aaa-111", "pid": 111},  # no cwd
-        ])
-
-        result = _build_session_cwd_map()
-        assert "aaa-111" not in result
 
 
 def _write_real_session_at(session_id: str, project_dir: Path, timestamp: datetime) -> Path:

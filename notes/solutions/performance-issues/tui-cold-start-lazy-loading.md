@@ -157,13 +157,34 @@ class PreviewPane(Static):
 
 ## Related Documentation
 
-- [Optimization plan](../../docs/plans/2026-03-30-001-perf-dashboard-cold-start-optimization-plan.md) -- Full 4-tier plan (Tiers 2-4 not yet implemented)
+- [Optimization plan](../../docs/plans/2026-03-30-001-perf-dashboard-cold-start-optimization-plan.md) -- Full 4-tier plan (Tier 3 not yet implemented)
 - [TUI lessons learned](../../../docs/solutions/claude-code-session-tui-lessons.md) -- Widget lifecycle, async/sync boundaries, `@work` patterns
-- [Clear session filtering](../../../docs/solutions/clear-session-and-subagent-filtering.md) -- `_is_clear_session` detection logic (relevant to future Tier 3 single-pass parser)
-- [Timestamp Z suffix parsing](../../../docs/solutions/timestamp-z-suffix-parsing.md) -- Must be preserved in any parser rewrite
+- [Clear session filtering](../../../docs/solutions/clear-session-and-subagent-filtering.md) -- `_is_clear_session` detection logic (now folded into single-pass parser)
+- [Timestamp Z suffix parsing](../../../docs/solutions/timestamp-z-suffix-parsing.md) -- Preserved in single-pass parser rewrite
 
-## Future Work (Tiers 2-4)
+## Tier 2: Single-Pass Parser (Implemented 2026-03-30)
 
-- **Tier 2: Single-pass parser** -- Fold `_is_clear_session`, `_extract_title`, `_determine_status`, `_extract_last_assistant_message` into one pass per file (~4x less CPU per file)
+Rewrote `parse_jsonl()` to extract all metadata in a single pass through the JSONL lines, instead of the previous approach that walked the parsed lines 4-6 times via separate helper functions.
+
+### What changed
+
+- `parse_jsonl()` now reads the file line by line, parsing each line as JSON once, and extracts all fields (session_id, cwd, title, timestamp, last assistant message, status, clear-session detection) in that single loop
+- Removed 4 helper functions folded into the single pass: `_is_clear_session`, `_determine_status`, `_extract_title`, `_extract_last_assistant_message`
+- Removed dead code: `_build_session_cwd_map()` (was defined and tested but never called in production)
+- Removed 6 tests for `_build_session_cwd_map`; remaining 47 tests all pass
+- `parser.py` went from 367 lines to 277 lines (24% reduction)
+
+### Key design decisions
+
+- **Timestamp: last one wins.** The old code walked reversed lines to find the last timestamp. The single-pass approach keeps overwriting `last_timestamp` on each line, so the final value is naturally the last one.
+- **Title priority preserved.** `ai-title` type entries take precedence (first one wins via `if not title` guard). First user message text is tracked separately as `first_user_text` for the fallback.
+- **Clear session detection unchanged.** Still checks `has_clear_command AND NOT has_assistant` after the loop completes -- the logic requires seeing all lines before deciding.
+- **Z suffix handling preserved.** The `Z` → `+00:00` replacement for Python 3.10 compat is inline in the timestamp extraction block.
+
+### Prevention note
+
+When adding new metadata extraction to `parse_jsonl`, add it to the single loop body rather than creating a new helper that re-walks the lines. The single-pass pattern must be maintained.
+
+## Future Work (Tier 3)
+
 - **Tier 3: Metadata cache with mtime invalidation** -- Cache parsed metadata to `~/.claude/dashboard-cache.json`, only re-parse files whose mtime changed
-- **Cleanup:** Remove dead code `_build_session_cwd_map()` (defined at `parser.py:28`, tested, never called)
