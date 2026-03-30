@@ -331,16 +331,9 @@ class PendingSessionsApp(App):
         filter_input.focus()
 
     def on_input_submitted(self, event: Input.Submitted):
-        """Handle filter input submission."""
+        """Handle filter input submission (backup path if priority binding doesn't fire)."""
         if event.input.id == "filter-input":
-            days = parse_filter_input(event.value)
-            if days is not None:
-                self._days_filter = days
-            event.input.remove_class("visible")
-            event.input.value = ""
-            self.query_one("#session-list", SessionListView).focus()
-            self.sub_title = filter_subtitle(self._days_filter)
-            self.refresh_sessions()
+            self._submit_filter(event.input)
 
     def action_move_up(self):
         """Move up in the list."""
@@ -384,8 +377,19 @@ class PendingSessionsApp(App):
             pass
 
     def action_open_session(self):
-        """Open the selected session in Claude Code."""
+        """Open the selected session in Claude Code.
+
+        When the filter input is visible, Enter should submit the filter
+        instead of opening a session. The app-level enter binding has
+        priority=True (to override ListView), which also intercepts Enter
+        from the Input widget — so we detect that case and delegate.
+        """
         try:
+            filter_input = self.query_one("#filter-input", Input)
+            if filter_input.has_class("visible"):
+                self._submit_filter(filter_input)
+                return
+
             list_view = self.query_one("#session-list", SessionListView)
             session = list_view.get_selected_session()
             if session:
@@ -394,6 +398,17 @@ class PendingSessionsApp(App):
                 self.exit(result=session)
         except Exception as e:
             print("Error opening session: {}".format(e))
+
+    def _submit_filter(self, filter_input: Input):
+        """Process filter input submission and hide the widget."""
+        days = parse_filter_input(filter_input.value)
+        if days is not None:
+            self._days_filter = days
+        filter_input.remove_class("visible")
+        filter_input.value = ""
+        self.query_one("#session-list", SessionListView).focus()
+        self.sub_title = filter_subtitle(self._days_filter)
+        self.refresh_sessions()
 
     def action_dismiss_current(self):
         """Dismiss the selected session."""
