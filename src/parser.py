@@ -2,13 +2,16 @@
 Session discovery and JSONL parsing.
 
 Scans ~/.claude/projects/ for session files and extracts metadata.
+Uses an mtime-based metadata cache to skip re-parsing unchanged files.
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+
+from src.cache import load_cache, save_cache
 
 
 @dataclass
@@ -46,19 +49,55 @@ def load_message_history(filepath: Path) -> list[dict]:
     return lines
 
 
+def _session_to_cache_entry(session: Session) -> dict:
+    """Serialize a Session to a cache-storable dict."""
+    d = asdict(session)
+    d["filepath"] = str(d["filepath"])
+    d["last_message_timestamp"] = session.last_message_timestamp.isoformat()
+    return d
+
+
+def _session_from_cache_entry(entry: dict) -> Session:
+    """Deserialize a Session from a cache dict."""
+    return Session(
+        session_id=entry["session_id"],
+        project_name=entry["project_name"],
+        title=entry["title"],
+        last_message_timestamp=datetime.fromisoformat(entry["last_message_timestamp"]),
+        last_assistant_message=entry["last_assistant_message"],
+        filepath=Path(entry["filepath"]),
+        status=entry.get("status", "ready"),
+        project_dir=entry.get("project_dir"),
+    )
+
+
+# Module-level cache dict, persisted across refreshes within a single app run.
+_cache: dict | None = None
+
+
 def discover_sessions() -> list[Session]:
     """
     Discover all sessions in ~/.claude/projects/ recursively.
 
+    Uses an mtime-based cache to skip re-parsing unchanged files.
+
     Returns:
         List of Session objects, or empty list if directory doesn't exist.
     """
+    global _cache
+
     projects_dir = Path.home() / ".claude" / "projects"
 
     if not projects_dir.exists():
         return []
 
+    cache_path = Path.home() / ".claude" / "dashboard-cache.json"
+
+    if _cache is None:
+        _cache = load_cache(cache_path)
+
     sessions = []
+    new_cache = {}
 
     # Find all .jsonl files, but only at the top level of each project directory.
     # Nested files (e.g. {session}/subagents/{agent}.jsonl) are subagent logs,
@@ -67,13 +106,42 @@ def discover_sessions() -> list[Session]:
         relative = jsonl_file.relative_to(projects_dir)
         if len(relative.parts) != 2:
             continue
+
+        key = str(jsonl_file)
+        try:
+            file_mtime = jsonl_file.stat().st_mtime
+        except OSError:
+            continue
+
+        # Use cached metadata if mtime unchanged
+        cached = _cache.get(key)
+        if cached and cached.get("mtime") == file_mtime:
+            try:
+                session = _session_from_cache_entry(cached["metadata"])
+                sessions.append(session)
+                new_cache[key] = cached
+                continue
+            except Exception:
+                pass  # fall through to re-parse
+
+        # Parse the file (new or modified)
         try:
             session = parse_jsonl(jsonl_file)
             if session:
                 sessions.append(session)
+                new_cache[key] = {
+                    "mtime": file_mtime,
+                    "metadata": _session_to_cache_entry(session),
+                }
         except Exception as e:
-            # Log but continue on parse errors
             print(f"Warning: Failed to parse {jsonl_file}: {e}")
+
+    # Update module-level and disk caches
+    _cache = new_cache
+    try:
+        save_cache(cache_path, new_cache)
+    except Exception:
+        pass  # cache write failure is non-fatal
 
     # Sort by most recent activity first
     sessions.sort(key=lambda s: s.last_message_timestamp, reverse=True)
