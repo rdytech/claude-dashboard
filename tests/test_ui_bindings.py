@@ -311,6 +311,40 @@ class TestDismissedViewMode:
         assert "dismissed-1" in ids, "Dismissed session should appear in dismissed view."
         assert "active-1" not in ids, "Active session should not appear in dismissed view."
 
+    def test_filter_dismissed_sessions_respects_days_filter(self, tmp_path, monkeypatch):
+        """Dismissed view should apply the same days filter to avoid rendering thousands of old sessions."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        (tmp_path / ".claude").mkdir(parents=True)
+
+        from src.dismiss import dismiss_session
+        dismiss_session("recent-dismissed")
+        dismiss_session("old-dismissed")
+
+        from src.ui import filter_dismissed_sessions
+        sessions = [
+            _make_session("recent-dismissed", "proj", days_ago=2),
+            _make_session("old-dismissed", "proj", days_ago=30),
+        ]
+        result = filter_dismissed_sessions(sessions, days_filter=7)
+        ids = [s.session_id for s in result]
+        assert "recent-dismissed" in ids, "Recently dismissed session should appear with 7-day filter."
+        assert "old-dismissed" not in ids, "Old dismissed session should be excluded by 7-day filter."
+
+    def test_filter_dismissed_sessions_zero_days_shows_all(self, tmp_path, monkeypatch):
+        """With days_filter=0, all dismissed sessions should appear regardless of age."""
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        (tmp_path / ".claude").mkdir(parents=True)
+
+        from src.dismiss import dismiss_session
+        dismiss_session("ancient-dismissed")
+
+        from src.ui import filter_dismissed_sessions
+        sessions = [
+            _make_session("ancient-dismissed", "proj", days_ago=365),
+        ]
+        result = filter_dismissed_sessions(sessions, days_filter=0)
+        assert len(result) == 1, "With days_filter=0, even very old dismissed sessions should appear."
+
 
 class TestSearchBinding:
     """The '/' key binding must exist and trigger the search action."""

@@ -55,10 +55,19 @@ def filter_sessions(sessions: list[Session], days_filter: int = DEFAULT_DAYS_FIL
     return result
 
 
-def filter_dismissed_sessions(sessions: list[Session]) -> list[Session]:
-    """Return only dismissed sessions (the inverse of the normal filter)."""
+def filter_dismissed_sessions(sessions: list[Session], days_filter: int = DEFAULT_DAYS_FILTER) -> list[Session]:
+    """Return only dismissed sessions, with optional date filtering.
+
+    When days_filter is 0, no date filtering is applied (show all dismissed).
+    """
     dismissed_ids = read_dismissed_ids()
-    return [s for s in sessions if s.session_id in dismissed_ids]
+    result = [s for s in sessions if s.session_id in dismissed_ids]
+
+    if days_filter > 0:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_filter)
+        result = [s for s in result if is_within_cutoff(s, cutoff)]
+
+    return result
 
 
 def group_sessions(sessions: list[Session]) -> list[tuple[str, Any]]:
@@ -357,7 +366,7 @@ class PendingSessionsApp(App):
         self.call_from_thread(self._show_loading)
         all_sessions = discover_sessions()
         if self._show_dismissed:
-            visible_sessions = filter_dismissed_sessions(all_sessions)
+            visible_sessions = filter_dismissed_sessions(all_sessions, self._days_filter)
         else:
             visible_sessions = filter_sessions(all_sessions, self._days_filter)
         self.call_from_thread(self._update_session_list, visible_sessions)
@@ -521,7 +530,8 @@ class PendingSessionsApp(App):
         """Toggle between active and dismissed sessions view."""
         self._show_dismissed = not self._show_dismissed
         if self._show_dismissed:
-            self.sub_title = "Dismissed sessions"
+            days_label = filter_subtitle(self._days_filter)
+            self.sub_title = f"Dismissed sessions ({days_label})"
         else:
             self.sub_title = filter_subtitle(self._days_filter)
         self.refresh_sessions()
