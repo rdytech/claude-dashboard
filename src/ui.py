@@ -4,6 +4,7 @@ Textual TUI for pending Claude Code sessions.
 Main UI components and key binding handlers.
 """
 
+import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
@@ -269,6 +270,7 @@ class PendingSessionsApp(App):
         Binding("D", "toggle_dismissed", "Dismissed", show=True),
         Binding("slash", "open_search", "Search", show=True),
         Binding("f", "open_filter", "Filter", show=True),
+        Binding("v", "open_in_vscode", "VS Code", show=True),
         Binding("g", "toggle_group", "Group", show=True),
         Binding("r", "refresh", "Refresh", show=True),
         Binding("q", "quit", "Quit", show=True),
@@ -507,6 +509,24 @@ class PendingSessionsApp(App):
                 self.exit(result=session)
         except Exception as e:
             print("Error opening session: {}".format(e))
+
+    def action_open_in_vscode(self):
+        """Open VS Code in the session's project dir and copy the resume command to clipboard."""
+        try:
+            list_view = self.query_one("#session-list", SessionListView)
+            session = list_view.get_selected_session()
+            if not session:
+                return
+
+            resume_cmd = "claude --resume {}".format(session.session_id)
+            subprocess.run("clip", input=resume_cmd.encode(), check=True, shell=True)
+
+            if session.project_dir:
+                subprocess.Popen("code {}".format(session.project_dir), shell=True)
+
+            self.notify("Copied resume command — paste into VS Code terminal")
+        except Exception as e:
+            self.notify("Error: {}".format(e), severity="error")
 
     def _submit_filter(self, filter_input: Input):
         """Process filter input submission and hide the widget."""
