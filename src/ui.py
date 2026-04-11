@@ -518,7 +518,7 @@ class PendingSessionsApp(App):
             if not session:
                 return
 
-            resume_cmd = "claude --resume {}".format(session.session_id)
+            resume_cmd = "c --resume {}".format(session.session_id)
             subprocess.run("clip", input=resume_cmd.encode(), check=True, shell=True)
 
             if session.project_dir:

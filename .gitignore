@@ -67,3 +67,4 @@ htmlcov/
 # Project specific
 .claude/
 *.log
+tmp/
